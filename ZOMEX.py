@@ -8,7 +8,8 @@ for v in ("NUMBA_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_N
 from scipy.interpolate import PchipInterpolator
 from ZOMEX_spec import CreateSpectra
 from concurrent.futures import ProcessPoolExecutor, as_completed
-
+import h5py
+from ZOMEX_FM import ZOMEXFM
 NS = 0
 DS = 1
 HS = 2
@@ -184,9 +185,13 @@ class ZOMEXEmissionModel() :
         self.grid.plot(self.phi)
 
 class ZOMEXEmission() : 
-    def __init__(self,grid : Grid,l_phases,l_orders):
+    def __init__(self,grid : Grid,l_phases,l_orders,save_file=None):
+        self.save_file = save_file
         self.grid = grid
         self.l_phases = l_phases
+        if self.save_file != None : 
+            with h5py.File(self.save_file, "a") as f:
+                f.create_dataset("phase",data=self.l_phases)
         self.l_orders = l_orders
     def run_not_parallelized(self) : 
         for i in self.l_orders :
@@ -197,10 +202,12 @@ class ZOMEXEmission() :
             self.emission_model.add_model(HS,CreateSpectra.load_from_txt("./models/Gliese_H2O/31.txt"))
             self.emission_model.shift_models()
             #A.add_data(data)
-            for j in self.l_phases :
+            for j,phase in enumerate(self.l_phases) :
                 #print("Phase : "+str(j)) 
-                self.emission_model.update(j)
+                self.emission_model.update(phase)
                 self.emission_model.run()
+                if self.save_file != None : 
+                    ZOMEXFM.save_data(self.save_file,j,i,self.emission_model.wl,self.emission_model.final_spectrum)
     def _task(self,order) : 
         print("Order : "+str(order))
         self.emission_model = ZOMEXEmissionModel(self.grid)
@@ -236,8 +243,8 @@ if __name__ == "__main__" :
     
     t0 = time.time()
     
-   # A = ZOMEXEmission(grid,np.linspace(0,np.pi*2,100),range(0,49,1))
-   # A.run_not_parallelized()
+    A = ZOMEXEmission(grid,np.linspace(0,np.pi*2,100),range(0,49,1),save_file="try.h5")
+    A.run_not_parallelized()
     print(time.time()-t0)
     
     t0 = time.time()
