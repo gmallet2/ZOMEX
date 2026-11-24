@@ -246,7 +246,7 @@ if __name__ == "__main__" :
     #CC.grid.plot_speeds()
     #CC.plot_planet()
     CC.update(np.radians(100))
-    #CC.plot_planet()
+    CC.plot_planet()
 
     CC.add_model(NS,CreateSpectra.load_from_txt("./models/Gliese_H2O/31.txt"))
     CC.add_model(DS,CreateSpectra.load_from_txt("./models/Gliese_H2O/31.txt"))
