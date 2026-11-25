@@ -249,7 +249,7 @@ if __name__ == "__main__" :
     phases = phase_spirou *2 * np.pi
     phases = np.linspace(phases[0],phases[-1],100)
     print(phases)
-    A = ZOMEXEmission(grid,phases,range(31,79,1),save_file="try.h5")
+    A = ZOMEXEmission(grid,phases,range(31,80,1),save_file="try.h5")
     A.run_not_parallelized()
     print(time.time()-t0)
     

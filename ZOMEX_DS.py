@@ -67,7 +67,11 @@ class ZOMEXDS() :
         with h5py.File(self.f_planet, "r") as f:
             self.phases = f["phase"][:]/(np.pi*2) #from [0,2*pi] -> [0,1]
         #self.phases = (self.phases + 0.5) % 1 - 0.5
-    def load_star(self,f_star_wl,f_star_data) : 
+    def load_star(self,f_star_wl,f_star_data) :
+        """
+        Load and interpolate star from files. We usually use PHOENIX spectras : 
+        UNITS HAVE TO BE IN erg.s-1.cm-2.cm-1 !
+        """ 
         star_spec_read = fits.open(self.data_dir+f_star_data) #stellar spectra
         star_wl_read = fits.open(self.data_dir+f_star_wl) # wavelength of stellar spectra
         self.star_interp = PchipInterpolator(star_wl_read[0].data, star_spec_read[0].data)
@@ -93,22 +97,39 @@ class ZOMEXDS() :
         plt.scatter(phase_spirou,airmass_spirou)
         plt.scatter(self.phases,self.airmass,s=3)
         plt.show()
+
     def load_tellurics(self,f_tellurics) : 
+        """
+        Load and interpolate tellurics from a file f_tellurics
+        """
         tellurics_tot = np.loadtxt(self.data_dir+f_tellurics)
         self.tellurics_interp = PchipInterpolator(tellurics_tot[:,0],  tellurics_tot[:,1])
 
-    def _planet_at_phase(self,phase,phase_index,order) : 
+    def _planet_at_phase(self,phase_index,order) : 
+        """
+        Given the self.f_planet .h5 file, this function loads and interpolate the flux for the right phase and order for our planet !
+        UNITS HAVE TO BE IN erg.s-1.cm-2.cm-1, but it's normally done with ZOMEX-generated .h5 planet files.
+        Inputs : 
+            -> phase_index : index of the phase in the self.phase list of the phases ;
+            -> order : the order : for SPIRou, it is an in between 31 and 79
+        Returns an interpolator of the planet at the given phase and order ;
+        """
         wl,flux = ZOMEXFM.load_data(self.f_planet,phase_index,order)
-        print(wl)
-        print(flux)
+        #print(wl)
+        #print(flux)
         return PchipInterpolator(wl,flux)
 
     def _run_one_order(self,order) : #Order : 31 to 79
-        print(self.orders_spirou)
+        """
+        This task processes the data simulation for one given order (at all phases) ;
+        Inputs : 
+            -> order : the order number. For SPIRou, it's between 31 and 79 ;
+        """
+        #print(self.orders_spirou)
         indice_order=np.where(self.orders_spirou==order)[0][0]
         no=np.where(self.orders==order)[0][0]
 
-        print(indice_order)
+        #print(indice_order)
         lmin = self.orders[no,1]
         lmax = self.orders[no,2]
         wl_order_high = [lmin*0.99]
@@ -145,10 +166,9 @@ class ZOMEXDS() :
             
         ### IF we want blaze, we interpolate the SPIRou blaze and add it to the noise
         if consider_blaze:
-            #blaze_interp = interpolate.CubicSpline(self.wl_spirou[indice_order], self.blaze_spirou[indice_order][0])
-            #blaze_order = blaze_interp(wl_order)
-            #blaze_and_noise_order = 1+(noise_order)*np.max(np.sqrt(blaze_order))/np.sqrt(blaze_order)
-            pass
+            blaze_interp = interpolate.CubicSpline(self.wl_spirou[indice_order], self.blaze_spirou[indice_order][0])
+            blaze_order = blaze_interp(wl_order)
+            blaze_and_noise_order = 1+(noise_order)*np.max(np.sqrt(blaze_order))/np.sqrt(blaze_order)
 
         for i,phase in enumerate(self.phases) : 
             self.data_order_high[i] = self.star_interp(wl_order_high*10*(1-self.Vc[i]/c0)) ### *10 because phoenix is in Angstrom
@@ -161,14 +181,15 @@ class ZOMEXDS() :
             ### Add the planet, doppler shifted by its orbital velocity
             #if window[t]>0:
                 #if phase_dependency:
-            plt.plot(wl_order_high,self.data_order_high[i])
-            model_interp = self._planet_at_phase(phase,i,order)
-            plt.plot(wl_order_high,model_interp(wl_order_high))
+            #plt.plot(wl_order_high,self.data_order_high[i])
+            model_interp = self._planet_at_phase(i,order)
+            #print(np.mean(self.star_interp(wl_order_high))/np.mean(model_interp(wl_order_high)))
+            #plt.plot(wl_order_high,model_interp(wl_order_high))
             self.data_order_high[i] *= (1.+100000*(Rp/Rs)**2 * model_interp(wl_order_high*(1-(self.Vc[i]+self.Vp[i])/c0))/self.data_order_high[i]) #EMISSION CASE
                 #else:
                     #data_order_high[t] *= (1.-model_interp(wl_order_high*(1-(Vc[t]+Vp[t])/c0))*window[t]) # TRANSIT CASE
-            plt.plot(wl_order_high,self.data_order_high[i])
-            plt.show()
+            #plt.plot(wl_order_high,self.data_order_high[i])
+            #plt.show()
             self.data_order_high[i] /= np.max(self.data_order_high[i]) ### We normalize the data to 1, not a big deal
 
             ### Add tellurics
@@ -187,13 +208,12 @@ class ZOMEXDS() :
             data_order[i] = tmp/len(pixel_array)
         mid = int(len(wl_order)/2)
         if consider_blaze:
-            pass
-            #data_order*= blaze_and_noise_order
-            #SN_order =1./ np.std(blaze_and_noise_order[:,mid-int(mid/4):mid+int(mid/4)],axis=1)
+            data_order*= blaze_and_noise_order
+            SN_order =1./ np.std(blaze_and_noise_order[:,mid-int(mid/4):mid+int(mid/4)],axis=1)
         else:
             data_order *= 1+noise_order
             SN_order = 1./np.std(noise_order[:,mid-int(mid/4):mid+int(mid/4)],axis=1)
-
+        return (data_order,wl_order,SN_order,np.tile(blaze_order,(len(self.phases),1)),(np.tile(self.tell_fin,(len(self.phases),1)).T**self.airmass).T)   
         ### Store the data
         #orders_final.append(orders_spirou[i])
         #data.append(data_order)
@@ -206,12 +226,38 @@ class ZOMEXDS() :
         #plt.plot(wl_order,data_order[50])
 
         #plt.show()
-    def run(self,l_orders="all") :
+    def run(self,l_orders="all",f_save = "zomex_simulated_data.pkl") :
+        wl = []
+        data = []
+        SN = []
+        blaze = []
+        tellurics = []
+        orders_final = []
         if l_orders == "all" : 
-            pass 
+            for i in self.orders : 
+                print(i)
+                try :
+                    data_order,wl_order,SN_order,blaze_order,tell_order = self._run_one_order(int(i[0]))
+                    plt.plot(wl_order,data_order[0])
+                except(KeyError) : 
+                    print("This order doesn't exist. Skipping")
+            ### Store the data
+                orders_final.append(int(i[0]))
+                data.append(data_order)
+                wl.append(wl_order)
+                SN.append(SN_order)
+                blaze.append(blaze_order) 
+                ### To be consistent with SPIRou fits file we do this but it can be changed
+                tellurics.append(tell_order)
+            plt.show()
+        savedata = (orders_final,wl,data,blaze,tellurics,T_obs,self.phases,window,self.berv,V0+self.Vs,self.airmass,SN)
+        with open(self.data_dir+f_save, 'wb') as specfile:
+            pickle.dump(savedata,specfile)
+print("DONE")
 if __name__=="__main__" : 
     A = ZOMEXDS("./data/","orders_spirou.dat","try.h5")
     A.features("WASP33.pkl")
     A.load_star("WAVE_PHOENIX-ACES-AGSS-COND-2011.fits","lte05000-4.50-0.0.PHOENIX-ACES-AGSS-COND-2011-HiRes.fits")
     A.load_tellurics("tellurics_ESO.txt")
-    A._run_one_order(31)
+    A.run(l_orders="all")
+    #A._run_one_order(31)
