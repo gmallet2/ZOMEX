@@ -224,6 +224,9 @@ class ZOMEXEmission() :
 
         return self.emission_model.final_spectrum,self.emission_model.wl,order
     def run_parallelized(self) : 
+        """
+        STILL NOT FINISHED - DON'T USE
+        """
         N_WORKERS = 4
         with ProcessPoolExecutor(max_workers=N_WORKERS) as ex:
             futures = [ex.submit(self._task, i) for i in self.l_orders]
