@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from plot_HSM import PlotPlanet
+from ZOMEX_plot import PlotPlanet
 import time
 import os
 for v in ("NUMBA_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):

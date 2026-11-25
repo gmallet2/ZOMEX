@@ -3,7 +3,6 @@
 
 import numpy as np
 from scipy.interpolate import PchipInterpolator,CubicSpline
-from scipy import signal
 from astropy.io import fits
 from ZOMEX_FM import ZOMEXFM
 import pickle
@@ -11,78 +10,44 @@ import h5py
 import matplotlib.pyplot as plt
 from ZOMEX_parameters import DataSimulationParameters as DS
 from ZOMEX_parameters import OrbitalParameters as OP
-class Tools() : 
-    @classmethod
-    def get_rvs(_,phase,k):
-        """
-        --> Inputs:     - t:   Time vector
-                        - k:   Semi-amplitude of the planet-induced RV signal on the host star
-                        - p:   Planet orbital period
-                        - t0:  Planet mid-transit time
-        --> Outputs:    - Planet-induced RV signature for the input time values 
-        """
-        return - k*np.sin(2.*np.pi*phase)
-    @classmethod
-    def rvp(_,phase,k,v):
-        """
-        --> Inputs:     - phase: Planet orbital phase (T-T_obs)/Porb
-                        - k:     Semi-amplitude of the planet RV
-                        - v:     Planet RV at mid-transit
-
-        --> Outputs:    - Planet RV for the input orbital phases
-        """
-        return k*np.sin(2.*np.pi*phase)+v
-    @classmethod
-    def broaden(_,wl,R,sigma) :  
-        c0 = 299792458.0
-        #we take a kernel of size 50 000 km/s, it is exagerated but is safe
-        vlim = 50000.0
-        nv = 5000
-        v = np.linspace(-vlim,vlim,nv)
-        dv = v[1]-v[0]
-        #we interpolate the model onto a regularly spaced speed array
-        w0 = np.mean(wl)
-        speed = c0*(w0/wl-1)
-        speed_int = np.arange(0.995*np.min(speed),0.995*np.max(speed),step=dv)
-        fmod = PchipInterpolator(speed[::-1],R[::-1])
-        mod_int = fmod(speed_int)
-        second_conv = np.exp(-v**2/2/sigma**2) #instrumental kernel
-        conv2_mod = 1/sigma/np.sqrt(2*np.pi)*2*vlim/nv*signal.oaconvolve(mod_int,second_conv,mode="same")  
-        wl_int = w0/(1+speed_int/c0)
-        #the model is largely oversampled and we don't want that, it is going to kill the calculation time
-        diff = len(conv2_mod)/len(wl)
-        spacing = max(1,round(5.*diff/6))
-        return (wl_int[nv:-nv:spacing][::-1],conv2_mod[nv:-nv:spacing][::-1])
-
-
-
-
+from ZOMEX_parameters import Tools,Directions
     
 class ZOMEXDS() : 
-    def __init__(self,data_dir,f_orders,f_planet,emission_or_transit = "emission"):
-        self.data_dir = data_dir
+    """
+    This is the Data Simulator for ZOMEX. It uses a ZOMEX-genereted planet (saved in a .h5 file), and simulates observed data, with a spectrometer,
+    such as SPIRou. For so, it 
+        1 - uses features from an other simulation, from SPIRou, such as the WASP33.pkl : it gets the berv, noise, blaze ans other from this simulation to create
+        realist berv, noise, blaze data...
+        2 - Loads a stellar spectra, from PHOENIX data for example.
+        3 - Loads tellurics (absorption from water)
+        4 Then, it loads the planet, and add all the different effects for each observed order (range of wavelength) : adding the star, performing the 
+        right shifts depending on the orbital parameters, then make normalizations, blaze,telluric,noise, broadening.
+        5 - Finally it saves the whole simulated spectrum in a .pkl file, in the same format as the one needed in ATMOSPHERIX data processing pipeline (Klein et al. 2024)
+
+    """
+    def __init__(self,f_orders,f_planet,emission_or_transit = "emission"):
         self.f_planet = f_planet
         self.emission_or_transit = emission_or_transit
-        self.orders = np.loadtxt(data_dir+f_orders)  #SPIRou order wavelength
+        self.orders = np.loadtxt(Directions.data_dir+f_orders)  #SPIRou order wavelength
         print(self.orders)
         with h5py.File(self.f_planet, "r") as f:
             self.phases = f["phase"][:]/(np.pi*2) #from [0,2*pi] -> [0,1]
-        #self.phases = (self.phases + 0.5) % 1 - 0.5
         self.T_obs = OP.T0 + self.phases * OP.Porb
+
     def load_star(self,f_star_wl,f_star_data) :
         """
         Load and interpolate star from files. We usually use PHOENIX spectras : 
         UNITS HAVE TO BE IN erg.s-1.cm-2.cm-1 !
         """ 
-        star_spec_read = fits.open(self.data_dir+f_star_data) #stellar spectra
-        star_wl_read = fits.open(self.data_dir+f_star_wl) # wavelength of stellar spectra
+        star_spec_read = fits.open(Directions.data_dir+f_star_data) #stellar spectra
+        star_wl_read = fits.open(Directions.data_dir+f_star_wl) # wavelength of stellar spectra
         self.star_interp = PchipInterpolator(star_wl_read[0].data, star_spec_read[0].data)
 
     def features(self,f_features) : 
         """
         Load berv and co from a .pkl planet file of an other existing planet, and then adapt them for our phase !!! 
         """
-        with open(self.data_dir+f_features,'rb') as specfile:
+        with open(Directions.data_dir+f_features,'rb') as specfile:
             self.orders_spirou,self.wl_spirou,I_spirou,self.blaze_spirou,tellurics_spirou,T_obs_spirou,phase_spirou,\
             window_spirou,berv_spirou,vstar_spirou,airmass_spirou,self.SN_spirou = pickle.load(specfile)
         airmass = CubicSpline(phase_spirou,airmass_spirou)
@@ -104,7 +69,7 @@ class ZOMEXDS() :
         """
         Load and interpolate tellurics from a file f_tellurics
         """
-        tellurics_tot = np.loadtxt(self.data_dir+f_tellurics)
+        tellurics_tot = np.loadtxt(Directions.data_dir+f_tellurics)
         self.tellurics_interp = PchipInterpolator(tellurics_tot[:,0],  tellurics_tot[:,1])
 
     def _planet_at_phase(self,phase_index,order) : 
@@ -252,11 +217,11 @@ class ZOMEXDS() :
             plt.show()
         window = np.ones_like(self.phases)
         savedata = (orders_final,wl,data,blaze,tellurics,self.T_obs,self.phases,window,self.berv,OP.V0+self.Vs,self.airmass,SN)
-        with open(self.data_dir+f_save, 'wb') as specfile:
+        with open(Directions.data_dir+f_save, 'wb') as specfile:
             pickle.dump(savedata,specfile)
 print("DONE")
 if __name__=="__main__" : 
-    A = ZOMEXDS("./data/","orders_spirou.dat","try.h5")
+    A = ZOMEXDS("orders_spirou.dat","try.h5")
     A.features("WASP33.pkl")
     A.load_star("WAVE_PHOENIX-ACES-AGSS-COND-2011.fits","lte05000-4.50-0.0.PHOENIX-ACES-AGSS-COND-2011-HiRes.fits")
     A.load_tellurics("tellurics_ESO.txt")
