@@ -67,6 +67,7 @@ class ZOMEXDS() :
         with h5py.File(self.f_planet, "r") as f:
             self.phases = f["phase"][:]/(np.pi*2) #from [0,2*pi] -> [0,1]
         #self.phases = (self.phases + 0.5) % 1 - 0.5
+        self.T_obs = T0 + self.phases * Porb
     def load_star(self,f_star_wl,f_star_data) :
         """
         Load and interpolate star from files. We usually use PHOENIX spectras : 
@@ -94,9 +95,9 @@ class ZOMEXDS() :
         #Compute planet RV
         self.Vp = Tools.rvp(self.phases,Kp,V_inj)
 
-        plt.scatter(phase_spirou,airmass_spirou)
-        plt.scatter(self.phases,self.airmass,s=3)
-        plt.show()
+        #plt.scatter(phase_spirou,airmass_spirou)
+        #plt.scatter(self.phases,self.airmass,s=3)
+        #plt.show()
 
     def load_tellurics(self,f_tellurics) : 
         """
@@ -250,7 +251,8 @@ class ZOMEXDS() :
                 ### To be consistent with SPIRou fits file we do this but it can be changed
                 tellurics.append(tell_order)
             plt.show()
-        savedata = (orders_final,wl,data,blaze,tellurics,T_obs,self.phases,window,self.berv,V0+self.Vs,self.airmass,SN)
+        window = np.ones_like(self.phases)
+        savedata = (orders_final,wl,data,blaze,tellurics,self.T_obs,self.phases,window,self.berv,V0+self.Vs,self.airmass,SN)
         with open(self.data_dir+f_save, 'wb') as specfile:
             pickle.dump(savedata,specfile)
 print("DONE")
