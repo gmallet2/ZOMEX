@@ -65,7 +65,8 @@ class ZOMEXDS() :
         self.orders = np.loadtxt(data_dir+f_orders)  #SPIRou order wavelength
         print(self.orders)
         with h5py.File(self.f_planet, "r") as f:
-            self.phases = f["phase"][:]
+            self.phases = f["phase"][:]/(np.pi*2) #from [0,2*pi] -> [0,1]
+        #self.phases = (self.phases + 0.5) % 1 - 0.5
     def load_star(self,f_star_wl,f_star_data) : 
         star_spec_read = fits.open(self.data_dir+f_star_data) #stellar spectra
         star_wl_read = fits.open(self.data_dir+f_star_wl) # wavelength of stellar spectra
@@ -76,12 +77,12 @@ class ZOMEXDS() :
         Load berv and co from a .pkl planet file of an other existing planet, and then adapt them for our phase !!! 
         """
         with open(self.data_dir+f_features,'rb') as specfile:
-            orders_spirou,self.wl_spirou,I_spirou,self.blaze_spirou,tellurics_spirou,T_obs_spirou,phase_spirou,\
+            self.orders_spirou,self.wl_spirou,I_spirou,self.blaze_spirou,tellurics_spirou,T_obs_spirou,phase_spirou,\
             window_spirou,berv_spirou,vstar_spirou,airmass_spirou,self.SN_spirou = pickle.load(specfile)
         airmass = CubicSpline(phase_spirou,airmass_spirou)
         self.airmass = airmass(self.phases)
         self.berv = np.linspace(berv_spirou[0],berv_spirou[-1],len(self.phases))
-
+        #print(tellurics_spirou)
         #Planet induced RV
         self.Vs = Tools.get_rvs(self.phases,Ks)
         self.Vc = V0 + self.Vs - self.berv  #Geocentric-to-barycentric correction
@@ -89,17 +90,27 @@ class ZOMEXDS() :
         #Compute planet RV
         self.Vp = Tools.rvp(self.phases,Kp,V_inj)
 
-        #plt.scatter(phase_spirou,airmass_spirou)
-        #plt.scatter(self.phases,self.airmass)
-        #plt.show()
+        plt.scatter(phase_spirou,airmass_spirou)
+        plt.scatter(self.phases,self.airmass,s=3)
+        plt.show()
+    def load_tellurics(self,f_tellurics) : 
+        tellurics_tot = np.loadtxt(self.data_dir+f_tellurics)
+        self.tellurics_interp = PchipInterpolator(tellurics_tot[:,0],  tellurics_tot[:,1])
+
     def _planet_at_phase(self,phase,phase_index,order) : 
         wl,flux = ZOMEXFM.load_data(self.f_planet,phase_index,order)
+        print(wl)
+        print(flux)
         return PchipInterpolator(wl,flux)
 
     def _run_one_order(self,order) : #Order : 31 to 79
-        lmin = self.orders[order,1]
-        lmax = self.orders[order,2]
-        resolution = 100
+        print(self.orders_spirou)
+        indice_order=np.where(self.orders_spirou==order)[0][0]
+        no=np.where(self.orders==order)[0][0]
+
+        print(indice_order)
+        lmin = self.orders[no,1]
+        lmax = self.orders[no,2]
         wl_order_high = [lmin*0.99]
         wl_next = wl_order_high[0]
         while wl_next <= lmax*1.01:
@@ -111,8 +122,7 @@ class ZOMEXDS() :
 
             ### calculate oversampled tellurics
         if consider_tellurics:
-            pass
-            #tell_high = tellurics_interp(wl_order_high).clip(min=0) ### ensure that there are no negative values
+            self.tell_high = self.tellurics_interp(wl_order_high).clip(min=0) ### ensure that there are no negative values
         ### Then we create the final wavelength range for our data, at the given resolution
         ### We do as in SPIRou : the pixel size is half the resolution
         wl_order = [lmin]
@@ -123,20 +133,19 @@ class ZOMEXDS() :
         wl_order = np.array(wl_order)
         
         if consider_tellurics:
-            pass
-            #tell_fin = tellurics_interp(wl_order).clip(min=0)
-
+            self.tell_fin = self.tellurics_interp(wl_order).clip(min=0)
+        #plt.plot(wl_order_high,self.star_interp(wl_order_high*10)/np.max(self.star_interp(wl_order_high*10)))
         data_order = np.zeros((len(self.phases),len(wl_order)))
         SN_order = np.zeros((len(self.phases)))
 
         ### We prepare the noise map at the given SNR
         noise_order = np.zeros(data_order.shape)
-        for t in range(len(data_order)):
-            noise_order[t] = np.random.normal(scale=1./np.mean(self.SN_spirou[i])/SN_scaling,size=np.shape(data_order)[1])
+        for i in range(len(data_order)):
+            noise_order[i] = np.random.normal(scale=1./np.mean(self.SN_spirou[indice_order])/SN_scaling,size=np.shape(data_order)[1])
             
         ### IF we want blaze, we interpolate the SPIRou blaze and add it to the noise
         if consider_blaze:
-            #blaze_interp = interpolate.CubicSpline(self.wl_spirou[i], self.blaze_spirou[i][0])
+            #blaze_interp = interpolate.CubicSpline(self.wl_spirou[indice_order], self.blaze_spirou[indice_order][0])
             #blaze_order = blaze_interp(wl_order)
             #blaze_and_noise_order = 1+(noise_order)*np.max(np.sqrt(blaze_order))/np.sqrt(blaze_order)
             pass
@@ -147,38 +156,62 @@ class ZOMEXDS() :
             ### In SPIRou, the flux can vary a lot from one observation to another because of imperfect
             ### centering of the fiber. I don't know how does that trnaslate to the ELT. You can leave or suppress that
             if consider_flux_variations:
-                #data_order_high[t]*= random.gauss(np.mean(I_spirou[i]),np.std(np.mean(I_spirou[i],axis=1)))
+                #data_order_high[i]*= random.gauss(np.mean(I_spirou[indice_order]),np.std(np.mean(I_spirou[indice_order],axis=1)))
                 pass
             ### Add the planet, doppler shifted by its orbital velocity
             #if window[t]>0:
                 #if phase_dependency:
+            plt.plot(wl_order_high,self.data_order_high[i])
             model_interp = self._planet_at_phase(phase,i,order)
-            self.data_order_high[i] *= (1.+(Rp/Rs)**2 * model_interp(wl_order_high*(1-(self.Vc[i]+self.Vp[i])/c0))/self.data_order_high[i]) #EMISSION CASE
+            plt.plot(wl_order_high,model_interp(wl_order_high))
+            self.data_order_high[i] *= (1.+100000*(Rp/Rs)**2 * model_interp(wl_order_high*(1-(self.Vc[i]+self.Vp[i])/c0))/self.data_order_high[i]) #EMISSION CASE
                 #else:
                     #data_order_high[t] *= (1.-model_interp(wl_order_high*(1-(Vc[t]+Vp[t])/c0))*window[t]) # TRANSIT CASE
+            plt.plot(wl_order_high,self.data_order_high[i])
+            plt.show()
             self.data_order_high[i] /= np.max(self.data_order_high[i]) ### We normalize the data to 1, not a big deal
 
             ### Add tellurics
             if consider_tellurics:
-                """
-                self.data_order_high_tell[t] = data_order_high[t]*tell_high**airmass[t]
-                
+                self.data_order_high_tell[i] = self.data_order_high[i]*self.tell_high**self.airmass[i]
                 ### Broadening of the new data at the instrumental resolution
-                wl_order_high_broad,data_order_high_broad = broaden(wl_order_high,data_order_high_tell[t],sigma*1000)
-                ### Interpolation of this broadened model
-                data_high_broad_interp = interpolate.CubicSpline(wl_order_high_broad, data_order_high_broad)"""
-                pass
+                wl_order_high_broad,data_order_high_broad = Tools.broaden(wl_order_high,self.data_order_high_tell[i],sigma*1000)
             else:
-                pass
-                #wl_order_high_broad,data_order_high_broad = broaden(wl_order_high,data_order_high[t],sigma*1000)
-                ### Interpolation of this broadened model
-                #data_high_broad_interp = interpolate.CubicSpline(wl_order_high_broad, data_order_high_broad)
+                wl_order_high_broad,data_order_high_broad = Tools.broaden(wl_order_high,self.data_order_high[i],sigma*1000)
+            self.data_high_broad_interp = interpolate.CubicSpline(wl_order_high_broad, data_order_high_broad)
             
             ### Integrate the intensity over the pixel size. This is performed very naively here
             tmp = np.zeros(len(wl_order))
             for pp in pixel_array: 
                 tmp += self.data_high_broad_interp(wl_order/(1.0+(pp)/c0))
-            data_order[t] = tmp/len(pixel_array)
+            data_order[i] = tmp/len(pixel_array)
+        mid = int(len(wl_order)/2)
+        if consider_blaze:
+            pass
+            #data_order*= blaze_and_noise_order
+            #SN_order =1./ np.std(blaze_and_noise_order[:,mid-int(mid/4):mid+int(mid/4)],axis=1)
+        else:
+            data_order *= 1+noise_order
+            SN_order = 1./np.std(noise_order[:,mid-int(mid/4):mid+int(mid/4)],axis=1)
+
+        ### Store the data
+        #orders_final.append(orders_spirou[i])
+        #data.append(data_order)
+        #wl.append(wl_order)
+        #SN.append(SN_order)
+        #blaze.append(np.tile(blaze_order,(len(T_obs),1))) 
+        ### To be consistent with SPIRou fits file we do this but it can be changed
+        #tellurics.append((np.tile(tell_fin,(len(T_obs),1)).T**airmass).T)
+        #plt.plot(wl_order,data_order[0])
+        #plt.plot(wl_order,data_order[50])
+
+        #plt.show()
+    def run(self,l_orders="all") :
+        if l_orders == "all" : 
+            pass 
 if __name__=="__main__" : 
     A = ZOMEXDS("./data/","orders_spirou.dat","try.h5")
-    A.features("HD189_SPIRou.pkl")
+    A.features("WASP33.pkl")
+    A.load_star("WAVE_PHOENIX-ACES-AGSS-COND-2011.fits","lte05000-4.50-0.0.PHOENIX-ACES-AGSS-COND-2011-HiRes.fits")
+    A.load_tellurics("tellurics_ESO.txt")
+    A._run_one_order(31)

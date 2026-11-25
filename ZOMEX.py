@@ -242,8 +242,14 @@ if __name__ == "__main__" :
     grid = Grid(N_mu=100,alpha=np.radians(30),delta=np.radians(30),v_rotation=5)
     
     t0 = time.time()
-    
-    A = ZOMEXEmission(grid,np.linspace(0,np.pi*2,100),range(0,49,1),save_file="try.h5")
+    import pickle
+    with open("./data/WASP33.pkl",'rb') as specfile:
+        orders_spirou,wl_spirou,I_spirou,blaze_spirou,tellurics_spirou,T_obs_spirou,phase_spirou,\
+        window_spirou,berv_spirou,vstar_spirou,airmass_spirou,SN_spirou = pickle.load(specfile)
+    phases = phase_spirou *2 * np.pi
+    phases = np.linspace(phases[0],phases[-1],100)
+    print(phases)
+    A = ZOMEXEmission(grid,phases,range(31,79,1),save_file="try.h5")
     A.run_not_parallelized()
     print(time.time()-t0)
     
