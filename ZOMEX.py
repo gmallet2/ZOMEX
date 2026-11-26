@@ -212,7 +212,7 @@ class ZOMEXEmission() :
             with h5py.File(self.save_file, "a") as f:
                 f.create_dataset("phase",data=self.l_phases)
         self.l_orders = l_orders
-    def run_not_parallelized(self) : 
+    def run_not_parallelized(self,l_orders_to_plot = [31],l_phases_to_plot=[0,10,50]) : 
         for i in self.l_orders :
             print("Order : "+str(i))
             self.emission_model = ZOMEXEmissionModel(self.grid,phi=np.radians(0))
@@ -228,43 +228,12 @@ class ZOMEXEmission() :
                 self.emission_model.run()
                 if self.save_file != None : 
                     ZOMEXFM.save_data(self.save_file,j,i,self.emission_model.wl,self.emission_model.final_spectrum)
-                self.emission_model.plot_all_infos()
-    def _task(self,order) : 
-        print("Order : "+str(order))
-        self.emission_model = ZOMEXEmissionModel(self.grid)
-        self.emission_model.add_model(NS,CreateSpectra.load_from_txt("./models/Gliese_H2O/31.txt"))
-        self.emission_model.add_model(DS,CreateSpectra.load_from_txt("./models/Gliese_H2O/31.txt"))
-        self.emission_model.add_model(HS,CreateSpectra.load_from_txt("./models/Gliese_H2O/31.txt"))
-        self.emission_model.shift_models()
-        #A.add_data(data)
-        for j in self.l_phases :
-            #print("Phase : "+str(j)) 
-            self.emission_model.areas = self.emission_model.grid.classify_points(j)
-            self.emission_model.run()
-            #np.savetxt("./models/"+str(j)+"_"+str(order)+".txt",self.emission_model.final_spectrum) -> 3 Go pour 100 phases * 50 ordres ! 
-
-        return self.emission_model.final_spectrum,self.emission_model.wl,order
-    def run_parallelized(self) : 
-        """
-        STILL NOT FINISHED - DON'T USE
-        """
-        N_WORKERS = 4
-        with ProcessPoolExecutor(max_workers=N_WORKERS) as ex:
-            futures = [ex.submit(self._task, i) for i in self.l_orders]
-            for f in as_completed(futures):
-                try:
-                    spectrum,wl,order = f.result()
-                    print(spectrum)
-                    if order == 2 : 
-                        plt.plot(wl,spectrum)
-                    print("ended")
-                except Exception as e:
-                    print("ÉCHEC :", repr(e), flush=True)
+                if j in l_phases_to_plot and i in l_orders_to_plot : 
+                    self.emission_model.plot_all_infos()
 
 if __name__ == "__main__" : 
 
     grid = Grid(N_mu=100,alpha=np.radians(30),delta=np.radians(30),v_rotation=5)
-    
     t0 = time.time()
     import pickle
     with open("./data/WASP33.pkl",'rb') as specfile:
@@ -272,31 +241,8 @@ if __name__ == "__main__" :
         window_spirou,berv_spirou,vstar_spirou,airmass_spirou,SN_spirou = pickle.load(specfile)
     phases = phase_spirou *2 * np.pi
     phases = np.linspace(phases[0],phases[-1],100)
-    print(phases)
+    #print(phases)
     phases = np.linspace(0,2*np.pi,100)
-    A = ZOMEXEmission(grid,phases,range(31,80,1),save_file="HD209_test.h5")
-    A.run_not_parallelized()
+    A = ZOMEXEmission(grid,phases,range(31,80,1),save_file="HD209_test_b.h5")
+    A.run_not_parallelized(l_phases_to_plot=[0,10,20,30,40,50,60,70,80,90,100])
     print(time.time()-t0)
-    wl,data = ZOMEXFM.load_data("HD209_test.h5",0,31)
-    plt.plot()
-    plt.plot(wl,data)
-    t0 = time.time()
-    #CC = ZOMEXEmissionModel(grid,phi=np.radians(30))
-    #CC.grid.plot_ld()
-    #CC.grid.plot_speeds()
-    #CC.plot_planet()
-    #CC.update(np.radians(100))
-    #CC.plot_planet()
-
-    #CC.add_model(NS,CreateSpectra.load_from_txt("./models/Gliese_H2O/31.txt"))
-    #CC.add_model(DS,CreateSpectra.load_from_txt("./models/Gliese_H2O/31.txt"))
-    #CC.add_model(HS,CreateSpectra.load_from_txt("./models/Gliese_H2O/31.txt"))
-    #CC.shift_models()
-    #CC.run()
-
-    #plt.plot(AA.wl,AA.final_spectrum)
-
-    #plt.plot(A.emission_model.wl,A.emission_model.final_spectrum)
-
-    plt.legend(["original","B","C"])
-    plt.show()

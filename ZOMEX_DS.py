@@ -33,7 +33,7 @@ class ZOMEXDS() :
         with h5py.File(self.f_planet, "r") as f:
             self.phases = f["phase"][:]/(np.pi*2) #from [0,2*pi] -> [0,1]
         self.T_obs = OP.T0 + self.phases * OP.Porb
-
+        self.n_obs = len(self.phases)
     def load_star(self,f_star_wl,f_star_data) :
         """
         Load and interpolate star from files. We usually use PHOENIX spectras : 
@@ -52,7 +52,7 @@ class ZOMEXDS() :
             window_spirou,berv_spirou,vstar_spirou,airmass_spirou,self.SN_spirou = pickle.load(specfile)
         airmass = CubicSpline(phase_spirou,airmass_spirou)
         self.airmass = airmass(self.phases)
-        self.berv = np.linspace(berv_spirou[0],berv_spirou[-1],len(self.phases))
+        self.berv = np.linspace(berv_spirou[0],berv_spirou[-1],self.n_obs)
         #print(tellurics_spirou)
         #Planet induced RV
         self.Vs = Tools.get_rvs(self.phases,OP.Ks)
@@ -103,8 +103,8 @@ class ZOMEXDS() :
             wl_next += wl_next/(DS.resolution*5)
             wl_order_high.append(wl_next)
         wl_order_high = np.array(wl_order_high)
-        self.data_order_high = np.zeros((len(self.phases),len(wl_order_high)))
-        self.data_order_high_tell = np.zeros((len(self.phases),len(wl_order_high)))
+        self.data_order_high = np.zeros((self.n_obs,len(wl_order_high)))
+        self.data_order_high_tell = np.zeros((self.n_obs,len(wl_order_high)))
 
             ### calculate oversampled tellurics
         if DS.consider_tellurics:
@@ -121,8 +121,8 @@ class ZOMEXDS() :
         if DS.consider_tellurics:
             self.tell_fin = self.tellurics_interp(wl_order).clip(min=0)
         #plt.plot(wl_order_high,self.star_interp(wl_order_high*10)/np.max(self.star_interp(wl_order_high*10)))
-        data_order = np.zeros((len(self.phases),len(wl_order)))
-        SN_order = np.zeros((len(self.phases)))
+        data_order = np.zeros((self.n_obs,len(wl_order)))
+        SN_order = np.zeros((self.n_obs))
 
         ### We prepare the noise map at the given SNR
         noise_order = np.zeros(data_order.shape)
@@ -135,7 +135,7 @@ class ZOMEXDS() :
             blaze_order = blaze_interp(wl_order)
             blaze_and_noise_order = 1+(noise_order)*np.max(np.sqrt(blaze_order))/np.sqrt(blaze_order)
 
-        for i,phase in enumerate(self.phases) : 
+        for i in range(self.n_obs) : 
             self.data_order_high[i] = self.star_interp(wl_order_high*10*(1-self.Vc[i]/DS.c0)) ### *10 because phoenix is in Angstrom
             
             ### In SPIRou, the flux can vary a lot from one observation to another because of imperfect
@@ -178,7 +178,7 @@ class ZOMEXDS() :
         else:
             data_order *= 1+noise_order
             SN_order = 1./np.std(noise_order[:,mid-int(mid/4):mid+int(mid/4)],axis=1)
-        return (data_order,wl_order,SN_order,np.tile(blaze_order,(len(self.phases),1)),(np.tile(self.tell_fin,(len(self.phases),1)).T**self.airmass).T)   
+        return (data_order,wl_order,SN_order,np.tile(blaze_order,(self.n_obs,1)),(np.tile(self.tell_fin,(self.n_obs,1)).T**self.airmass).T)   
         ### Store the data
         #orders_final.append(orders_spirou[i])
         #data.append(data_order)
