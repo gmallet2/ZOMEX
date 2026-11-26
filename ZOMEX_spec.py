@@ -1,5 +1,3 @@
-import os
-import glob
 import numpy as np
 class CreateSpectra() : 
     """
@@ -14,6 +12,13 @@ class CreateSpectra() :
         return np.loadtxt(file)
     @classmethod
     def dirac_spectrum(_,wl_range = [2000,2050],n_points=30000,width_dirac = 1) :#width in number of points 
+        """
+        Returns a simple dirac spectrum, for useful tests
+        Inputs : 
+            -> wl_range : the range of wavelength (better in nanometer)
+            -> n_points : number of points
+            -> wisth_dirac : the width of the top of the dirac : tend to one
+        """
         wl = np.linspace(wl_range[0],wl_range[1],n_points)
         data = np.zeros_like(wl)
         data[int((wl_range[1]-wl_range[0] - width_dirac)/2):int((wl_range[1]-wl_range[0] + width_dirac)/2)] = 1

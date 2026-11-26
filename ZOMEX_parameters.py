@@ -66,7 +66,7 @@ class Tools() :
     @classmethod
     def broaden(_,wl,R,sigma) :  
         c0 = 299792458.0
-        #we take a kernel of size 50 000 km/s, it is exagerated but is safe
+        #we take a kernel of size 50 000 m.s-1, it is exagerated but is safe
         vlim = 50000.0
         nv = 5000
         v = np.linspace(-vlim,vlim,nv)

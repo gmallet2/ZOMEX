@@ -10,7 +10,6 @@ Group data
 Group phase : array of the phases
 """
 class ZOMEXFM:
-
     @classmethod
     def save_data(_, filename, phase_index, order, wl, data):
         """
@@ -56,3 +55,10 @@ class ZOMEXFM:
             data = order_group[phase_name][:]
 
         return wl, data
+    @classmethod
+    def load_phases(_,filename) : 
+        """
+        Returns the phase in radians ([0,2*pi])
+        """
+        with h5py.File(filename, "r") as f :
+            return f["phase"][:]

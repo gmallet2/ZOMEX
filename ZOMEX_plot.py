@@ -43,3 +43,27 @@ class PlotPlanet() :
         ax.set_title("Visible hemisphere of the planet")
         ax.legend()
         ax.grid(alpha=0.25)
+
+    @classmethod
+    def plot_sys(_,phase,e,a,phi_0,phi_planet) : 
+        _, ax = plt.subplots(figsize=(8, 8))
+
+        ax.scatter(0, 0, s=20,color="lightgrey")
+        phases = np.linspace(0,2*np.pi,1000)
+        r = a/(1+e*np.cos(phases-phi_0))
+        r_p = a/(1+e*np.cos(phi_planet - phi_0))
+        r_p = r_p/np.max(r)
+        r = r/np.max(r)
+        ax.scatter(r*np.cos(phases),r*np.sin(phases),s=1)
+        ax.scatter(r_p*np.cos(phi_planet),r_p*np.sin(phi_planet),s=10,color="red")
+
+        ax.set_xlim(-1.05, 1.05)
+        ax.set_ylim(-1.05, 1.05)
+        ax.set_aspect("equal")
+        plt.show()
+        pass
+
+if __name__=="__main__" :
+    #_, ax = plt.subplots(figsize=(8, 8))
+    #PlotPlanet.plot_planet(ax,np.radians(120),np.radians(30),np.radians(30))
+    PlotPlanet.plot_sys(2,0.,1,np.radians(180),np.radians(30))
