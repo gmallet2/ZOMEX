@@ -183,7 +183,26 @@ class ZOMEXEmissionModel() :
             self.final_spectrum += (self.shift_arrays[i] @ weights_of_shifts_arrays)    
     def plot_planet(self) : 
         self.grid.plot(self.phi)
+    def plot_all_infos(self) : 
+        x = np.linspace(0, 10, 100)
 
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+        axes[0].plot(self.wl,self.models[str(NS)])
+        axes[0].plot(self.wl,self.models[str(DS)])
+        axes[0].plot(self.wl,self.models[str(HS)])
+
+        axes[0].plot(self.wl,self.final_spectrum)
+        axes[0].legend(["Night Side","Day Side","Hot Spot","Final Combination"])
+        axes[0].set_title("Spectra")
+        axes[0].set_xlabel("X")
+        axes[0].set_ylabel("Y")
+        axes[0].grid()
+        axes[1].scatter(self.grid.cart_coords[:,1],self.grid.cart_coords[:,2],c = self.grid.classify_points(self.phi),s=4)
+        PlotPlanet.plot_planet(axes[1],self.phi,self.grid.delta,self.grid.alpha)
+        axes[1].set_title("Planet at phase : "+str(self.phi))
+        axes[1].grid()
+        plt.tight_layout()
+        plt.show()
 class ZOMEXEmission() : 
     def __init__(self,grid : Grid,l_phases,l_orders,save_file=None):
         self.save_file = save_file
@@ -197,9 +216,10 @@ class ZOMEXEmission() :
         for i in self.l_orders :
             print("Order : "+str(i))
             self.emission_model = ZOMEXEmissionModel(self.grid,phi=np.radians(0))
-            self.emission_model.add_model(NS,CreateSpectra.load_from_txt("./models/Gliese_H2O/31.txt"))
-            self.emission_model.add_model(DS,CreateSpectra.load_from_txt("./models/Gliese_H2O/31.txt"))
-            self.emission_model.add_model(HS,CreateSpectra.load_from_txt("./models/Gliese_H2O/31.txt"))
+            self.emission_model.add_model(NS,CreateSpectra.load_from_txt("./models/HD_209_H2O/NS/"+str(i)+".txt"))
+            self.emission_model.add_model(DS,CreateSpectra.load_from_txt("./models/HD_209_H2O/DS/"+str(i)+".txt"))
+            self.emission_model.add_model(HS,CreateSpectra.load_from_txt("./models/HD_209_H2O/HS/"+str(i)+".txt"))
+
             self.emission_model.shift_models()
             #A.add_data(data)
             for j,phase in enumerate(self.l_phases) :
@@ -208,6 +228,7 @@ class ZOMEXEmission() :
                 self.emission_model.run()
                 if self.save_file != None : 
                     ZOMEXFM.save_data(self.save_file,j,i,self.emission_model.wl,self.emission_model.final_spectrum)
+                self.emission_model.plot_all_infos()
     def _task(self,order) : 
         print("Order : "+str(order))
         self.emission_model = ZOMEXEmissionModel(self.grid)
@@ -252,42 +273,28 @@ if __name__ == "__main__" :
     phases = phase_spirou *2 * np.pi
     phases = np.linspace(phases[0],phases[-1],100)
     print(phases)
-    #A = ZOMEXEmission(grid,phases,range(31,80,1),save_file="try_2.h5")
-    #A.run_not_parallelized()
+    phases = np.linspace(0,2*np.pi,100)
+    A = ZOMEXEmission(grid,phases,range(31,80,1),save_file="HD209_test.h5")
+    A.run_not_parallelized()
     print(time.time()-t0)
-    
+    wl,data = ZOMEXFM.load_data("HD209_test.h5",0,31)
+    plt.plot()
+    plt.plot(wl,data)
     t0 = time.time()
-    CC = ZOMEXEmissionModel(grid,phi=np.radians(30))
+    #CC = ZOMEXEmissionModel(grid,phi=np.radians(30))
     #CC.grid.plot_ld()
     #CC.grid.plot_speeds()
     #CC.plot_planet()
-    CC.update(np.radians(100))
-    CC.plot_planet()
+    #CC.update(np.radians(100))
+    #CC.plot_planet()
 
-    CC.add_model(NS,CreateSpectra.load_from_txt("./models/Gliese_H2O/31.txt"))
-    CC.add_model(DS,CreateSpectra.load_from_txt("./models/Gliese_H2O/31.txt"))
-    CC.add_model(HS,CreateSpectra.load_from_txt("./models/Gliese_H2O/31.txt"))
-    CC.shift_models()
-    CC.run()
+    #CC.add_model(NS,CreateSpectra.load_from_txt("./models/Gliese_H2O/31.txt"))
+    #CC.add_model(DS,CreateSpectra.load_from_txt("./models/Gliese_H2O/31.txt"))
+    #CC.add_model(HS,CreateSpectra.load_from_txt("./models/Gliese_H2O/31.txt"))
+    #CC.shift_models()
+    #CC.run()
 
-
-    grid_2 = Grid(N_mu=100,alpha=np.radians(30),delta=np.radians(30),v_rotation=5,v_res=0.01)
-    AA = ZOMEXEmissionModel(grid_2,phi=np.radians(30))
-    #AA.grid.plot_ld()
-    #AA.grid.plot_speeds()
-    #AA.plot_planet()
-    AA.update(np.radians(100))
-    #AA.plot_planet()
-
-    AA.add_model(NS,CreateSpectra.load_from_txt("./models/Gliese_H2O/31.txt"))
-    AA.add_model(DS,CreateSpectra.load_from_txt("./models/Gliese_H2O/31.txt"))
-    AA.add_model(HS,CreateSpectra.load_from_txt("./models/Gliese_H2O/31.txt"))
-    AA.shift_models()
-    AA.run()
-    print(time.time()-t0)
-    plt.plot(CC.wl,CC.models["0"])
-    plt.plot(CC.wl,CC.final_spectrum)
-    plt.plot(AA.wl,AA.final_spectrum)
+    #plt.plot(AA.wl,AA.final_spectrum)
 
     #plt.plot(A.emission_model.wl,A.emission_model.final_spectrum)
 

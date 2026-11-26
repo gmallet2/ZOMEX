@@ -7,3 +7,5 @@ read_functions.py
 *.pkl
 *.pdf
 *.params
+/models
+*.h5
