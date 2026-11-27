@@ -50,9 +50,20 @@ class ZOMEXDS() :
         with open(Directions.data_dir+f_features,'rb') as specfile:
             self.orders_spirou,self.wl_spirou,I_spirou,self.blaze_spirou,tellurics_spirou,T_obs_spirou,phase_spirou,\
             window_spirou,berv_spirou,vstar_spirou,airmass_spirou,self.SN_spirou = pickle.load(specfile)
-        airmass = CubicSpline(phase_spirou,airmass_spirou)
-        self.airmass = airmass(self.phases)
-        self.berv = np.linspace(berv_spirou[0],berv_spirou[-1],self.n_obs)
+        #airmass = CubicSpline(phase_spirou,airmass_spirou)
+        #self.airmass = airmass(self.phases)
+        #self.berv = np.linspace(berv_spirou[0],berv_spirou[-1],self.n_obs)
+
+        ph_s = np.unwrap(phase_spirou * 2*np.pi) / (2*np.pi)
+        order = np.argsort(ph_s)
+        ph_s, airmass_s, berv_s = ph_s[order], airmass_spirou[order], berv_spirou[order]
+
+        # axe normalisé [0, 1] pour SPIRou et pour tes phases
+        u_s  = (ph_s - ph_s[0]) / (ph_s[-1] - ph_s[0])
+        ph_m = np.unwrap(self.phases * 2*np.pi) / (2*np.pi)
+        u_m  = (ph_m - ph_m.min()) / (ph_m.max() - ph_m.min())
+        self.airmass = np.interp(u_m, u_s, airmass_s)
+        self.berv    = np.interp(u_m, u_s, berv_s)
         #print(tellurics_spirou)
         #Planet induced RV
         self.Vs = Tools.get_rvs(self.phases,OP.Ks)
@@ -61,9 +72,9 @@ class ZOMEXDS() :
         #Compute planet RV
         self.Vp = Tools.rvp(self.phases,OP.Kp,OP.V_inj)
 
-        #plt.scatter(phase_spirou,airmass_spirou)
-        #plt.scatter(self.phases,self.airmass,s=3)
-        #plt.show()
+        plt.scatter(phase_spirou,airmass_spirou)
+        plt.scatter(self.phases,self.airmass,s=3)
+        plt.show()
 
     def load_tellurics(self,f_tellurics) : 
         """
@@ -221,7 +232,7 @@ class ZOMEXDS() :
             pickle.dump(savedata,specfile)
 print("DONE")
 if __name__=="__main__" : 
-    A = ZOMEXDS("orders_spirou.dat","try.h5")
+    A = ZOMEXDS("orders_spirou.dat","HD209_test.h5")
     A.features("WASP33.pkl")
     A.load_star("WAVE_PHOENIX-ACES-AGSS-COND-2011.fits","lte05000-4.50-0.0.PHOENIX-ACES-AGSS-COND-2011-HiRes.fits")
     A.load_tellurics("tellurics_ESO.txt")

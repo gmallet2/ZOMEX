@@ -184,9 +184,7 @@ class ZOMEXEmissionModel() :
     def plot_planet(self) : 
         self.grid.plot(self.phi)
     def plot_all_infos(self) : 
-        x = np.linspace(0, 10, 100)
-
-        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+        _, axes = plt.subplots(1, 2, figsize=(12, 5))
         axes[0].plot(self.wl,self.models[str(NS)])
         axes[0].plot(self.wl,self.models[str(DS)])
         axes[0].plot(self.wl,self.models[str(HS)])
@@ -194,8 +192,8 @@ class ZOMEXEmissionModel() :
         axes[0].plot(self.wl,self.final_spectrum)
         axes[0].legend(["Night Side","Day Side","Hot Spot","Final Combination"])
         axes[0].set_title("Spectra")
-        axes[0].set_xlabel("X")
-        axes[0].set_ylabel("Y")
+        axes[0].set_xlabel("Wavelength (nanometer)")
+        axes[0].set_ylabel("Flux ($erg.s^{-1}.cm^{-2}.cm^{-1}$)")
         axes[0].grid()
         axes[1].scatter(self.grid.cart_coords[:,1],self.grid.cart_coords[:,2],c = self.grid.classify_points(self.phi),s=4)
         PlotPlanet.plot_planet(axes[1],self.phi,self.grid.delta,self.grid.alpha)
@@ -235,12 +233,12 @@ if __name__ == "__main__" :
 
     grid = Grid(N_mu=100,alpha=np.radians(30),delta=np.radians(30),v_rotation=5)
     t0 = time.time()
-    import pickle
-    with open("./data/WASP33.pkl",'rb') as specfile:
-        orders_spirou,wl_spirou,I_spirou,blaze_spirou,tellurics_spirou,T_obs_spirou,phase_spirou,\
-        window_spirou,berv_spirou,vstar_spirou,airmass_spirou,SN_spirou = pickle.load(specfile)
-    phases = phase_spirou *2 * np.pi
-    phases = np.linspace(phases[0],phases[-1],100)
+    #import pickle
+    #with open("./data/WASP33.pkl",'rb') as specfile:
+    #    orders_spirou,wl_spirou,I_spirou,blaze_spirou,tellurics_spirou,T_obs_spirou,phase_spirou,\
+    #    window_spirou,berv_spirou,vstar_spirou,airmass_spirou,SN_spirou = pickle.load(specfile)
+    #phases = phase_spirou *2 * np.pi
+    #phases = np.linspace(phases[0],phases[-1],100)
     #print(phases)
     phases = np.linspace(0,2*np.pi,100)
     A = ZOMEXEmission(grid,phases,range(31,80,1),save_file="HD209_test_b.h5")
