@@ -219,7 +219,6 @@ class ZOMEXEmission() :
             self.emission_model.add_model(HS,CreateSpectra.load_from_txt("./models/HD_209_H2O/HS/"+str(i)+".txt"))
 
             self.emission_model.shift_models()
-            #A.add_data(data)
             for j,phase in enumerate(self.l_phases) :
                 #print("Phase : "+str(j)) 
                 self.emission_model.update(phase)

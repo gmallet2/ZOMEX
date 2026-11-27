@@ -28,7 +28,7 @@ class DataSimulationParameters() :
     sigma = c0/resolution/(2*np.sqrt(2*np.log(2)))
     pixel_size = c0/resolution/2
     npixel = 10
-    pixel_array     = np.linspace(-pixel_size/2,pixel_size/2,npixel) # Window for integrating over a SPIRou pixel [km/s] -- Velocity bins of 2.28 km/s (Donati+2020b)
+    pixel_array = np.linspace(-pixel_size/2,pixel_size/2,npixel) # Window for integrating over a SPIRou pixel [km/s] -- Velocity bins of 2.28 km/s (Donati+2020b)
     ##################################################
 
     ############# Signal to noise parameters #########

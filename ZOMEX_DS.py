@@ -45,29 +45,23 @@ class ZOMEXDS() :
 
     def features(self,f_features) : 
         """
-        Load berv and co from a .pkl planet file of an other existing planet, and then adapt them for our phase !!! 
+        Load berv and co from a .pkl planet file of an other existing planet, and then adapt them to our phase !!! 
         """
         with open(Directions.data_dir+f_features,'rb') as specfile:
             self.orders_spirou,self.wl_spirou,I_spirou,self.blaze_spirou,tellurics_spirou,T_obs_spirou,phase_spirou,\
             window_spirou,berv_spirou,vstar_spirou,airmass_spirou,self.SN_spirou = pickle.load(specfile)
-        #airmass = CubicSpline(phase_spirou,airmass_spirou)
-        #self.airmass = airmass(self.phases)
-        #self.berv = np.linspace(berv_spirou[0],berv_spirou[-1],self.n_obs)
+        ph_s = np.unwrap(np.asarray(phase_spirou)*2*np.pi)/(2*np.pi)
+        idx = np.argsort(ph_s)  #In case it's not sorted yet -> won't normally happen...
+        ph_s,air_s,berv_s = ph_s[idx], np.asarray(airmass_spirou)[idx], np.asarray(berv_spirou)[idx]
+        # 2. Étirement affine : [ph_s.min(), ph_s.max()] -> [phases.min(), phases.max()]
+        pmin, pmax = self.phases.min(), self.phases.max()
+        ph_s_stretched = pmin + (ph_s-ph_s[0])/(ph_s[-1]-ph_s[0])*(pmax-pmin)
+        self.airmass = np.interp(self.phases, ph_s_stretched, air_s)
+        self.berv    = np.interp(self.phases, ph_s_stretched, berv_s)
 
-        ph_s = np.unwrap(phase_spirou * 2*np.pi) / (2*np.pi)
-        order = np.argsort(ph_s)
-        ph_s, airmass_s, berv_s = ph_s[order], airmass_spirou[order], berv_spirou[order]
-
-        # axe normalisé [0, 1] pour SPIRou et pour tes phases
-        u_s  = (ph_s - ph_s[0]) / (ph_s[-1] - ph_s[0])
-        ph_m = np.unwrap(self.phases * 2*np.pi) / (2*np.pi)
-        u_m  = (ph_m - ph_m.min()) / (ph_m.max() - ph_m.min())
-        self.airmass = np.interp(u_m, u_s, airmass_s)
-        self.berv    = np.interp(u_m, u_s, berv_s)
-        #print(tellurics_spirou)
         #Planet induced RV
         self.Vs = Tools.get_rvs(self.phases,OP.Ks)
-        self.Vc = OP.V0 + self.Vs - self.berv  #Geocentric-to-barycentric correction
+        self.Vc = OP.V0 + self.Vs - self.berv  #Geocentric-to-barycentric correction of the system (Vs -> V star) velocity
 
         #Compute planet RV
         self.Vp = Tools.rvp(self.phases,OP.Kp,OP.V_inj)
@@ -94,41 +88,39 @@ class ZOMEXDS() :
         """
         wl,flux = ZOMEXFM.load_data(self.f_planet,phase_index,order)
         return PchipInterpolator(wl,flux)
-
-    def _run_one_order(self,order) : #Order : 31 to 79
+    
+    def _build_wl(self,wl_min,wl_max,resolution) : 
+        """
+        Build an array ow wavelength between 2 lambdas, at a given resolution
+        """
+        l_wl = [wl_min]
+        wl_next = l_wl[0]
+        while wl_next <= wl_max:
+            wl_next += wl_next/resolution
+            l_wl.append(wl_next)
+        return np.array(l_wl)
+    
+    def _run_one_order(self,order) : #Order : [31.0,lambda_min,lambda_max,lambda_median]
         """
         This task processes the data simulation for one given order (at all phases) ;
         Inputs : 
-            -> order : the order number. For SPIRou, it's between 31 and 79 ;
+            -> order : the order features : [31.0,lambda_min,lambda_max,lambda_median] ;
         """
-        #print(self.orders_spirou)
-        indice_order=np.where(self.orders_spirou==order)[0][0]
-        no=np.where(self.orders==order)[0][0]
-
-        #print(indice_order)
-        lmin = self.orders[no,1]
-        lmax = self.orders[no,2]
-        wl_order_high = [lmin*0.99]
-        wl_next = wl_order_high[0]
-        while wl_next <= lmax*1.01:
-            wl_next += wl_next/(DS.resolution*5)
-            wl_order_high.append(wl_next)
-        wl_order_high = np.array(wl_order_high)
+        indice_order=np.where(self.orders_spirou==int(order[0]))[0][0] #Indice of the order in SPIRou's loaded data
+        lmin = order[1]
+        lmax = order[2]
+        
+        wl_order_high = self._build_wl(0.99*lmin,1.01*lmax,DS.resolution*5)
         self.data_order_high = np.zeros((self.n_obs,len(wl_order_high)))
         self.data_order_high_tell = np.zeros((self.n_obs,len(wl_order_high)))
-
-            ### calculate oversampled tellurics
+        print(wl_order_high)
+        ### calculate oversampled tellurics
         if DS.consider_tellurics:
             self.tell_high = self.tellurics_interp(wl_order_high).clip(min=0) ### ensure that there are no negative values
         ### Then we create the final wavelength range for our data, at the given resolution
         ### We do as in SPIRou : the pixel size is half the resolution
-        wl_order = [lmin]
-        wl_next = lmin
-        while wl_next <= lmax:
-            wl_next += wl_next/(2*DS.resolution)
-            wl_order.append(wl_next)
-        wl_order = np.array(wl_order)
-        
+        wl_order = self._build_wl(lmin,lmax,2*DS.resolution)
+        print(wl_order)
         if DS.consider_tellurics:
             self.tell_fin = self.tellurics_interp(wl_order).clip(min=0)
         #plt.plot(wl_order_high,self.star_interp(wl_order_high*10)/np.max(self.star_interp(wl_order_high*10)))
@@ -158,14 +150,14 @@ class ZOMEXDS() :
             #if window[t]>0:
                 #if phase_dependency:
             #plt.plot(wl_order_high,self.data_order_high[i])
-            model_interp = self._planet_at_phase(i,order)
+            model_interp = self._planet_at_phase(i,int(order[0]))
             #print(np.mean(self.star_interp(wl_order_high))/np.mean(model_interp(wl_order_high)))
-            #plt.plot(wl_order_high,model_interp(wl_order_high))
+            plt.plot(wl_order_high,model_interp(wl_order_high))
             self.data_order_high[i] *= (1.+100000*(OP.Rp/OP.Rs)**2 * model_interp(wl_order_high*(1-(self.Vc[i]+self.Vp[i])/DS.c0))/self.data_order_high[i]) #EMISSION CASE
                 #else:
                     #data_order_high[t] *= (1.-model_interp(wl_order_high*(1-(Vc[t]+Vp[t])/c0))*window[t]) # TRANSIT CASE
             #plt.plot(wl_order_high,self.data_order_high[i])
-            #plt.show()
+            plt.show()
             self.data_order_high[i] /= np.max(self.data_order_high[i]) ### We normalize the data to 1, not a big deal
 
             ### Add tellurics
@@ -190,19 +182,8 @@ class ZOMEXDS() :
             data_order *= 1+noise_order
             SN_order = 1./np.std(noise_order[:,mid-int(mid/4):mid+int(mid/4)],axis=1)
         return (data_order,wl_order,SN_order,np.tile(blaze_order,(self.n_obs,1)),(np.tile(self.tell_fin,(self.n_obs,1)).T**self.airmass).T)   
-        ### Store the data
-        #orders_final.append(orders_spirou[i])
-        #data.append(data_order)
-        #wl.append(wl_order)
-        #SN.append(SN_order)
-        #blaze.append(np.tile(blaze_order,(len(T_obs),1))) 
-        ### To be consistent with SPIRou fits file we do this but it can be changed
-        #tellurics.append((np.tile(tell_fin,(len(T_obs),1)).T**airmass).T)
-        #plt.plot(wl_order,data_order[0])
-        #plt.plot(wl_order,data_order[50])
-
-        #plt.show()
-    def run(self,l_orders="all",f_save = "zomex_simulated_data.pkl") :
+    
+    def run(self,l_orders="all",f_save = "zomex_simulated_data_test.pkl") :
         wl = []
         data = []
         SN = []
@@ -213,7 +194,7 @@ class ZOMEXDS() :
             for i in self.orders : 
                 print(i)
                 try :
-                    data_order,wl_order,SN_order,blaze_order,tell_order = self._run_one_order(int(i[0]))
+                    data_order,wl_order,SN_order,blaze_order,tell_order = self._run_one_order(i)
                     plt.plot(wl_order,data_order[0])
                 except(KeyError) : 
                     print("This order doesn't exist. Skipping")
