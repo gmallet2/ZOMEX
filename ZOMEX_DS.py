@@ -87,6 +87,7 @@ class ZOMEXDS() :
         Returns an interpolator of the planet at the given phase and order ;
         """
         wl,flux = ZOMEXFM.load_data(self.f_planet,phase_index,order)
+        wl = wl / 1e7          # provisoire : à corriger à la source
         return PchipInterpolator(wl,flux)
     
     def _build_wl(self,wl_min,wl_max,resolution) : 
@@ -109,8 +110,9 @@ class ZOMEXDS() :
         indice_order=np.where(self.orders_spirou==int(order[0]))[0][0] #Indice of the order in SPIRou's loaded data
         lmin = order[1]
         lmax = order[2]
-        
-        wl_order_high = self._build_wl(0.99*lmin,1.01*lmax,DS.resolution*5)
+
+        margin = 0.003
+        wl_order_high = self._build_wl(lmin*(1-margin),(1+margin)*lmax,DS.resolution*5)
         self.data_order_high = np.zeros((self.n_obs,len(wl_order_high)))
         self.data_order_high_tell = np.zeros((self.n_obs,len(wl_order_high)))
         print(wl_order_high)
@@ -151,6 +153,13 @@ class ZOMEXDS() :
                 #if phase_dependency:
             #plt.plot(wl_order_high,self.data_order_high[i])
             model_interp = self._planet_at_phase(i,int(order[0]))
+            wl_m, fl_m = ZOMEXFM.load_data(self.f_planet, i, int(order[0]))
+            print("ordre demandé :", order, " lmin, lmax :", lmin, lmax)
+            print("modèle wl :", wl_m.min(), wl_m.max(), len(wl_m))
+            print("modèle flux : min", fl_m.min(), "max", fl_m.max(), "nan", np.isnan(fl_m).sum())
+            print("grille demandée :", wl_order_high.min(), wl_order_high.max())
+
+            plt.plot(wl_m, fl_m, label="modèle brut"); plt.legend(); plt.show()
             #print(np.mean(self.star_interp(wl_order_high))/np.mean(model_interp(wl_order_high)))
             plt.plot(wl_order_high,model_interp(wl_order_high))
             self.data_order_high[i] *= (1.+100000*(OP.Rp/OP.Rs)**2 * model_interp(wl_order_high*(1-(self.Vc[i]+self.Vp[i])/DS.c0))/self.data_order_high[i]) #EMISSION CASE

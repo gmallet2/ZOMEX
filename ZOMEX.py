@@ -210,7 +210,7 @@ class ZOMEXEmission() :
             with h5py.File(self.save_file, "a") as f:
                 f.create_dataset("phase",data=self.l_phases)
         self.l_orders = l_orders
-    def run_not_parallelized(self,l_orders_to_plot = [31],l_phases_to_plot=[0,10,50]) : 
+    def run_not_parallelized(self,l_orders_to_plot = [31],l_phases_to_plot=[0,10]) : 
         for i in self.l_orders :
             print("Order : "+str(i))
             self.emission_model = ZOMEXEmissionModel(self.grid,phi=np.radians(0))
@@ -227,7 +227,6 @@ class ZOMEXEmission() :
                     ZOMEXFM.save_data(self.save_file,j,i,self.emission_model.wl,self.emission_model.final_spectrum)
                 if j in l_phases_to_plot and i in l_orders_to_plot : 
                     self.emission_model.plot_all_infos()
-
 if __name__ == "__main__" : 
 
     grid = Grid(N_mu=100,alpha=np.radians(30),delta=np.radians(30),v_rotation=5)
@@ -241,5 +240,5 @@ if __name__ == "__main__" :
     #print(phases)
     phases = np.linspace(0,2*np.pi,100)
     A = ZOMEXEmission(grid,phases,range(31,80,1),save_file="HD209_test_b.h5")
-    A.run_not_parallelized(l_phases_to_plot=[0,10,20,30,40,50,60,70,80,90,100])
+    A.run_not_parallelized()
     print(time.time()-t0)

@@ -24,7 +24,7 @@ class OrbitalParameters() :
 class DataSimulationParameters() : 
     ############ Spectral resolution parameters #######
     resolution = 115000
-    c0 = 3e5
+    c0 = 299792.458
     sigma = c0/resolution/(2*np.sqrt(2*np.log(2)))
     pixel_size = c0/resolution/2
     npixel = 10
